@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { generateSearchQuery } from '@/lib/llm';
+import { LLMFactory } from '@/lib/llm';
 import { searchSpotifyTracks } from '@/lib/spotifySearch';
 
 export async function POST(req: NextRequest) {
@@ -17,13 +17,16 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Missing prompt' }, { status: 400 });
     }
 
-    const openaiKey = process.env.OPENAI_API_KEY;
-    if (!openaiKey) {
-      return NextResponse.json({ error: 'Server configuration error: Missing LLM API Key' }, { status: 500 });
+    const providerName = (process.env.LLM_PROVIDER || 'openai') as 'openai' | 'gemini';
+    const apiKey = providerName === 'gemini' ? process.env.GEMINI_API_KEY : process.env.OPENAI_API_KEY;
+
+    if (!apiKey) {
+      return NextResponse.json({ error: `Server configuration error: Missing API Key for ${providerName}` }, { status: 500 });
     }
 
     // 1. LLM extracts query
-    const searchQuery = await generateSearchQuery(prompt, openaiKey);
+    const llmProvider = LLMFactory.getProvider(providerName);
+    const searchQuery = await llmProvider.generateSearchQuery(prompt, apiKey);
 
     // 2. Spotify Search
     const searchResults = await searchSpotifyTracks(searchQuery, tokenCookie.value);

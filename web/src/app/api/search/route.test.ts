@@ -1,13 +1,14 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { POST } from './route';
 import { NextRequest } from 'next/server';
-import * as llm from '@/lib/llm';
+import { LLMFactory } from '@/lib/llm';
 import * as spotifySearch from '@/lib/spotifySearch';
 
 // Mock dependencies
 vi.mock('@/lib/llm');
 vi.mock('@/lib/spotifySearch');
 
+process.env.LLM_PROVIDER = 'openai';
 process.env.OPENAI_API_KEY = 'test_openai_key';
 
 describe('POST /api/search', () => {
@@ -27,7 +28,9 @@ describe('POST /api/search', () => {
   });
 
   it('should process prompt, extract query, and return spotify tracks', async () => {
-    vi.spyOn(llm, 'generateSearchQuery').mockResolvedValue('lofi focus');
+    const mockProvider = { generateSearchQuery: vi.fn().mockResolvedValue('lofi focus') };
+    vi.spyOn(LLMFactory, 'getProvider').mockReturnValue(mockProvider as any);
+    
     vi.spyOn(spotifySearch, 'searchSpotifyTracks').mockResolvedValue({ tracks: { items: [{ name: 'Lofi Girl' }] } });
 
     // NextRequest parses the cookie header into req.cookies automatically
@@ -44,7 +47,8 @@ describe('POST /api/search', () => {
 
     const data = await response.json();
     expect(data.tracks.items[0].name).toBe('Lofi Girl');
-    expect(llm.generateSearchQuery).toHaveBeenCalledWith('I want to study late at night', 'test_openai_key');
+    expect(LLMFactory.getProvider).toHaveBeenCalledWith('openai');
+    expect(mockProvider.generateSearchQuery).toHaveBeenCalledWith('I want to study late at night', 'test_openai_key');
     expect(spotifySearch.searchSpotifyTracks).toHaveBeenCalledWith('lofi focus', 'mock_access_token');
   });
 });
